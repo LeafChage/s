@@ -4,12 +4,6 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-sparser = { path = "./sparser" }
-scalcurator = { path = "./scalcurator" }
+lexer = { path = "./lexer" }
+parser = { path = "./parser" }
 
-
-[workspace]
-members =  [
-    "sparser",
-    "scalcurator",
-]

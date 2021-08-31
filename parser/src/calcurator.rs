@@ -1,8 +1,6 @@
-extern crate sparser;
-
-use sparser::edge::Edge;
-use sparser::node::Node;
-use sparser::token::Token;
+use lexer::edge::Edge;
+use lexer::node::Node;
+use lexer::token::Token;
 
 fn number_from_edge(edge: Edge) -> isize {
     match edge {
@@ -43,7 +41,7 @@ pub fn calicurate_edge(node: Node) -> isize {
 
 #[test]
 fn ts_calicurate() {
-    use sparser::parser::parse;
+    use lexer::lexer::parse;
     let result = parse(
         r#"
         (- 34 -89)
