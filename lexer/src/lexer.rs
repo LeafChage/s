@@ -34,6 +34,7 @@ parser! {
         ]
     {
         token_parse('+')
+            .or(token_parse('='))
             .or(token_parse('-'))
             .or(token_parse('*'))
             .or(token_parse('/'))
@@ -197,7 +198,10 @@ parser! {
     {
         devide_space_newline(
             choice((
-                    token(),
+                    token().map(|t| {
+                        println!("token {:?}", t);
+                        t
+                    }),
                     bracket().map(|n| Edge::Node(n)),
             ))
         )
@@ -212,8 +216,8 @@ parser! {
     {
         devide_space_newline(
             between(
-                token_parse('('),
-                token_parse(')'),
+                token_parse('(').map(|v| { println!("(");v }),
+                token_parse(')').map(|v| { println!(")");v }),
                 edge().
                 and(many(edge())).
                 map(|(head, tail)| Node::new(head, tail))

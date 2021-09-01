@@ -7,11 +7,11 @@ pub enum Token {
 }
 
 impl Token {
-    pub fn symbol(s: &str) -> Self {
-        Token::Symbol(String::from(s))
+    pub fn symbol(s: impl Into<String>) -> Self {
+        Token::Symbol(s.into())
     }
-    pub fn string(s: &str) -> Self {
-        Token::String(String::from(s))
+    pub fn string(s: impl Into<String>) -> Self {
+        Token::String(s.into())
     }
 }
 
