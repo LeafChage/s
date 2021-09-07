@@ -1,5 +1,4 @@
-use super::edge::Edge;
-use super::node::Node;
+use super::s::{Edge, S};
 use super::token::Token;
 use combine::parser::char::{alpha_num, digit, letter, newline, space, string as string_parse};
 use combine::{
@@ -10,7 +9,7 @@ use std::string::*;
 use std::vec::*;
 
 parser! {
-    pub fn devide_space_newline[Input, P](parser: P)(Input) -> P::Output
+    fn devide_space_newline[Input, P](parser: P)(Input) -> P::Output
         where [
         Input: Stream<Token = char>,
         P: Parser<Input>
@@ -28,7 +27,7 @@ fn ts_devide_space_newline() {
 }
 
 parser! {
-    pub fn special_symbol[Input]()(Input) -> char
+    fn special_symbol[Input]()(Input) -> char
         where [
         Input: Stream<Token = char>,
         ]
@@ -44,11 +43,13 @@ parser! {
             .or(token_parse('%'))
             .or(token_parse('$'))
             .or(token_parse('#'))
+            .or(token_parse('>'))
+            .or(token_parse('<'))
     }
 }
 
 parser! {
-    pub fn symbol[Input]()(Input) -> Token
+    fn symbol[Input]()(Input) -> Token
         where [
         Input: Stream<Token = char>,
         ]
@@ -85,7 +86,7 @@ fn ts_symbol() {
 }
 
 parser! {
-    pub fn string[Input]()(Input) -> Token
+    fn string[Input]()(Input) -> Token
         where [
         Input: Stream<Token = char>,
         ]
@@ -108,7 +109,7 @@ fn ts_string() {
 }
 
 parser! {
-    pub fn boolean[Input]()(Input) -> Token
+    fn boolean[Input]()(Input) -> Token
         where [
         Input: Stream<Token = char>,
         ]
@@ -137,7 +138,7 @@ fn ts_boolean() {
 
 parser! {
     /// not support decimal
-    pub fn numeric[Input]()(Input) -> Token
+    fn numeric[Input]()(Input) -> Token
         where [
         Input: Stream<Token = char>,
         ]
@@ -176,7 +177,7 @@ fn ts_numeric() {
 }
 
 parser! {
-    pub fn token[Input]()(Input) -> Edge
+    fn token[Input]()(Input) -> Edge
         where [
         Input: Stream<Token = char>,
         ]
@@ -191,36 +192,36 @@ parser! {
 }
 
 parser! {
-    pub fn edge[Input]()(Input) -> Edge
+    fn atom[Input]()(Input) -> Edge
         where [
         Input: Stream<Token = char>,
         ]
     {
         devide_space_newline(
             choice((
-                    token().map(|t| {
-                        println!("token {:?}", t);
-                        t
-                    }),
-                    bracket().map(|n| Edge::Node(n)),
+                    token(),
+                    bracket().map(|n| Edge::S(n)),
             ))
         )
     }
 }
 
 parser! {
-    pub fn bracket[Input]()(Input) -> Node
+    fn bracket[Input]()(Input) -> S
         where [
         Input: Stream<Token = char>,
         ]
     {
         devide_space_newline(
             between(
-                token_parse('(').map(|v| { println!("(");v }),
-                token_parse(')').map(|v| { println!(")");v }),
-                edge().
-                and(many(edge())).
-                map(|(head, tail)| Node::new(head, tail))
+                token_parse('('),
+                token_parse(')'),
+                atom().
+                and(many::<Vec<_>, _, _>(atom()).map(|tails| S::from_vector(tails))).
+                map(|(head, tail)| S::cons(head, tail)).map(|s| {
+                    println!("[{:15}] {:?}", "Lexer", s);
+                    s
+                })
             )
         )
     }
@@ -233,15 +234,15 @@ mod test {
     fn ts_bracket1() {
         assert_eq!(
             bracket().easy_parse("(a1 (b1 b2 b3))").map(|d| d.0),
-            Ok(Node::new(
+            Ok(S::cons(
                 Edge::Token(Token::symbol("a1")),
-                vec![Edge::Node(Node::new(
+                S::unit(Edge::S(S::cons(
                     Edge::Token(Token::symbol("b1")),
-                    vec![
+                    S::cons(
                         Edge::Token(Token::symbol("b2")),
-                        Edge::Token(Token::symbol("b3")),
-                    ]
-                )),]
+                        S::unit(Edge::Token(Token::symbol("b3")))
+                    )
+                )))
             ))
         );
     }
@@ -257,25 +258,27 @@ mod test {
             "
                 )
                 .map(|d| d.0),
-            Ok(Node::new(
+            Ok(S::cons(
                 Edge::Token(Token::symbol("a1")),
-                vec![
-                    Edge::Node(Node::new(
+                S::cons(
+                    Edge::S(S::cons(
                         Edge::Token(Token::symbol("b1")),
-                        vec![
+                        S::cons(
                             Edge::Token(Token::symbol("b2")),
-                            Edge::Token(Token::symbol("b3")),
-                        ]
+                            S::unit(Edge::Token(Token::symbol("b3")))
+                        )
                     )),
-                    Edge::Node(Node::new(
-                        Edge::Node(Node::new(
-                            Edge::Token(Token::symbol("d1")),
-                            vec![Edge::Token(Token::symbol("d2")),]
+                    S::cons(
+                        Edge::S(S::cons(
+                            Edge::S(S::cons(
+                                Edge::Token(Token::symbol("d1")),
+                                S::unit(Edge::Token(Token::symbol("d2")))
+                            )),
+                            S::unit(Edge::Token(Token::symbol("c2")))
                         )),
-                        vec![Edge::Token(Token::symbol("c2")),]
-                    )),
-                    Edge::Token(Token::symbol("a4")),
-                ]
+                        S::unit(Edge::Token(Token::symbol("a4")))
+                    )
+                )
             ))
         );
     }
@@ -284,28 +287,38 @@ mod test {
     fn ts_bracket3() {
         assert_eq!(
             bracket().easy_parse(" (+ 1 2 3 (- 34 -89)) ").map(|d| d.0),
-            Ok(Node::new(
+            Ok(S::cons(
                 Edge::Token(Token::symbol("+")),
-                vec![
+                S::cons(
                     Edge::Token(Token::Number(1)),
-                    Edge::Token(Token::Number(2)),
-                    Edge::Token(Token::Number(3)),
-                    Edge::Node(Node::new(
-                        Edge::Token(Token::symbol("-")),
-                        vec![
-                            Edge::Token(Token::Number(34)),
-                            Edge::Token(Token::Number(-89)),
-                        ]
-                    )),
-                ]
+                    S::cons(
+                        Edge::Token(Token::Number(2)),
+                        S::cons(
+                            Edge::Token(Token::Number(3)),
+                            S::unit(Edge::S(S::cons(
+                                Edge::Token(Token::symbol("-")),
+                                S::cons(
+                                    Edge::Token(Token::Number(34)),
+                                    S::unit(Edge::Token(Token::Number(-89)))
+                                ),
+                            )))
+                        )
+                    )
+                )
             ))
         );
     }
 }
 
+pub fn s(
+    src: &str,
+) -> Result<(S, &str), combine::easy::Errors<char, &str, combine::stream::PointerOffset<str>>> {
+    bracket().easy_parse(src)
+}
+
 pub fn parse(
     src: &str,
-) -> Result<(Vec<Node>, &str), combine::easy::Errors<char, &str, combine::stream::PointerOffset<str>>>
+) -> Result<(Vec<S>, &str), combine::easy::Errors<char, &str, combine::stream::PointerOffset<str>>>
 {
-    many::<Vec<Node>, _, _>(bracket()).easy_parse(src)
+    many::<Vec<S>, _, _>(bracket()).easy_parse(src)
 }

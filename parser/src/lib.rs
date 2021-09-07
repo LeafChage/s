@@ -1,8 +1,8 @@
 extern crate lexer;
 
-pub mod calcurator;
+pub mod boolean;
 pub mod error;
-pub mod match_token;
+pub mod math;
+pub mod parser;
 pub mod search_token;
-pub mod sfor;
 pub mod sif;

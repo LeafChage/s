@@ -1,68 +1,58 @@
-use super::error::Result;
+use super::error::{ParseError, Result};
 use super::search_token::SearchToken;
-use lexer::edge::Edge;
-use lexer::node::Node;
+use lexer::s::{Edge, S};
 use lexer::token::Token;
 
-pub fn sif(node: Node) -> Result<Edge> {
-    let _ = node.symbol_with("if")?;
-
-    let mut edges = node.tail.into_iter();
-    let head = edges.next().unwrap();
-    let result = match head {
-        Edge::Node(node) => condition(*node.head, node.tail)?,
-        Edge::Token(Token::Boolean(b)) => b,
-        n => panic!("Expected boolean, this is {:?}", n),
-    };
-
-    Ok(if result {
-        edges.next().unwrap()
-    } else {
-        let _ = edges.next();
-        edges.next().unwrap()
-    })
+pub fn evaluate(s: &S) -> Result<Token> {
+    let _ = s.symbol_with("if")?;
+    let b = s.tail().head();
+    let first = s.tail().tail().head();
+    let second = s.tail().tail().tail().head();
+    sif(b, first, second)
 }
 
-fn tail_matches<F>(edges: &[Edge], then: F) -> bool
-where
-    F: Fn(isize, isize) -> bool,
-{
-    match edges {
-        [Edge::Token(Token::Number(n)), Edge::Token(Token::Number(m))] => then(*n, *m),
-        [a, b] => panic!("expected type is number, number, this is {:?}, {:?}", a, b),
-        [] | [_, _, ..] => panic!("expected type is number, number, unexpected arg counts"),
-        _ => panic!("Unexpected Error"),
+fn sif<'a>(condition: &'a Edge, if_true: &'a Edge, if_false: &'a Edge) -> Result<Token> {
+    let b = super::parser::parse(condition)?;
+    match b {
+        Token::Boolean(b) => {
+            let result = if b { if_true } else { if_false };
+            println!(
+                "[{:15}] if({:?}) {:?} else {:?}  => {:?}",
+                "Parser IF", b, if_true, if_false, result,
+            );
+
+            super::parser::parse(result)
+        }
+        n => Err(ParseError::expected_boolean_token(n)),
     }
 }
 
-/// not supported string == string
-pub fn condition(head: Edge, tail: Vec<Edge>) -> Result<bool> {
-    let symbol = head.symbol()?;
-    match symbol {
-        "eq" | "=" => Ok(tail_matches(&tail[..], |n, m| n == m)),
-        ">=" => Ok(tail_matches(&tail[..], |n, m| n >= m)),
-        "<=" => Ok(tail_matches(&tail[..], |n, m| n <= m)),
-        ">" => Ok(tail_matches(&tail[..], |n, m| n > m)),
-        "<" => Ok(tail_matches(&tail[..], |n, m| n < m)),
-        n => panic!("expected bool, this is {}", n),
+#[cfg(test)]
+mod test {
+    use super::*;
+    use lexer::lexer::s;
+
+    #[test]
+    fn ts_sif() {
+        let s = s(r#"(if (= 1 1) 1 2)"#).unwrap();
+        assert_eq!(evaluate(&(s.0)), Ok(Token::Number(1)));
     }
-}
 
-#[test]
-fn ts_sif() {
-    use lexer::lexer::parse;
-    let result = parse(
-        r#"
-        (if true 1 2)
-        (if (eq 1 1) 3 4)
-        (if (= 1 2) 3 4)
-        "#,
-    )
-    .map(|d| d.0)
-    .unwrap();
+    #[test]
+    fn ts_sif2() {
+        let s = s(r#"(if (eq 1 1) 1 2)"#).unwrap();
+        assert_eq!(evaluate(&(s.0)), Ok(Token::Number(1)));
+    }
 
-    let mut a = result.into_iter().map(|d| sif(d));
-    assert_eq!(a.next().unwrap().unwrap(), Edge::Token(Token::Number(1)));
-    assert_eq!(a.next().unwrap().unwrap(), Edge::Token(Token::Number(3)));
-    assert_eq!(a.next().unwrap().unwrap(), Edge::Token(Token::Number(4)));
+    #[test]
+    fn ts_sif3() {
+        let s = s(r#"(if (>= 1 3) 1 2)"#).unwrap();
+        assert_eq!(evaluate(&(s.0)), Ok(Token::Number(2)));
+    }
+
+    #[test]
+    fn ts_sif4() {
+        let s = s(r#"(if (< 1 3) 1 2)"#).unwrap();
+        assert_eq!(evaluate(&(s.0)), Ok(Token::Number(1)));
+    }
 }
